@@ -11,13 +11,13 @@ Application de démo (app/)  ──►  logs/app.log  ──►  Analyseur de lo
 ```
 
 - **Application de démo** : petite API FastAPI qui simule un service et ses pannes, et écrit des logs.
-- **AI Incident Analyzer** (`analyzer/`) : lit les logs, extrait et regroupe les erreurs, puis les fait analyser par un LLM *(LLM à venir)*.
+- **AI Incident Analyzer** (`analyzer/`) : lit les logs, extrait et regroupe les erreurs, puis les fait analyser par un LLM local (Ollama) via un workflow LangGraph.
 
 ## État d'avancement
 
 - [x] Tâche 1 — Application de démo et génération des logs
 - [x] Tâche 2 — Collecte et analyse des logs
-- [ ] Tâche 3 — Agent IA (Ollama + LangGraph)
+- [x] Tâche 3 — Agent IA (Ollama + LangGraph)
 - [ ] Tâche 4 — Docker
 - [ ] Tâche 5 — Tests et CI (pytest, GitHub Actions)
 - [ ] Tâche 6 — Kubernetes
@@ -27,6 +27,7 @@ Application de démo (app/)  ──►  logs/app.log  ──►  Analyseur de lo
 
 - Python 3.11+
 - Windows (PowerShell), Linux ou macOS
+- [Ollama](https://ollama.com) lancé localement, avec le modèle `qwen2.5:3b` (`ollama pull qwen2.5:3b`)
 
 ## Installation
 
@@ -85,6 +86,51 @@ Logs précédant l'erreur :
 - WARNING Database connection attempt failed, retrying (host=db, port=5432)
 ```
 
+## Diagnostic par l'agent IA
+
+```powershell
+python -m analyzer --diagnose                    # analyse les 3 incidents les plus fréquents
+python -m analyzer --diagnose --max-incidents 1  # plus rapide
+python -m analyzer --diagnose --json             # résultat au format JSON
+```
+
+Workflow LangGraph :
+
+```
+START → collect_incidents ─┬─ incidents trouvés → diagnose_incidents → build_report → END
+                           └─ aucun incident ───────────────────────→ build_report → END
+```
+
+- Le LLM est contraint de répondre dans un format JSON précis (schéma Pydantic `Diagnosis`) : description, causes possibles, gravité (`low` / `medium` / `high` / `critical`), vérifications, actions correctives.
+- Réponse invalide → nouvelle tentative (2 au maximum). Échec sur un incident → les autres sont quand même analysés.
+- Le diagnostic est présenté comme une hypothèse. **Aucune action n'est exécutée** : l'agent propose, le développeur décide.
+
+Configuration (variables d'environnement) :
+
+| Variable         | Défaut                   | Rôle                                  |
+|------------------|--------------------------|---------------------------------------|
+| `OLLAMA_HOST`    | `http://127.0.0.1:11434` | Adresse du serveur Ollama             |
+| `OLLAMA_MODEL`   | `qwen2.5:3b`             | Modèle utilisé                        |
+| `OLLAMA_TIMEOUT` | `300`                    | Délai maximal d'une réponse (secondes) |
+
+Exemple de résultat (extrait) :
+
+```
+=== Incident 2 : Database unavailable: connection refused (host=db, port=5432) ===
+Occurrences : 2
+Gravité estimée : Moyenne
+Description : L'incident est lié à une impossibilité de se connecter à la base de données.
+Causes possibles (hypothèses à vérifier) :
+  1. La base de données est hors ligne ou indisponible.
+  2. Le serveur de base de données est en maintenance.
+  3. La configuration de la base de données a été modifiée, ce qui a affecté la connexion.
+Vérifications recommandées :
+  - Vérifier la disponibilité du serveur de base de données.
+  - Vérifier la configuration de la base de données (port, nom d'hôte, etc.).
+```
+
+Sur un PC portable sans GPU dédié (i5-1235U), l'analyse de 3 incidents prend environ 1 à 2 minutes.
+
 ## Structure du projet
 
 ```
@@ -98,7 +144,12 @@ ai-incident-analyzer/
 │   ├── __main__.py         # commande : python -m analyzer
 │   ├── log_parser.py       # lecture et découpage des lignes de log
 │   ├── incidents.py        # filtrage, regroupement et contexte des erreurs
-│   └── llm_input.py        # mise en forme des incidents pour le LLM
+│   ├── llm_input.py        # mise en forme des incidents pour le LLM
+│   ├── config.py           # configuration Ollama (variables d'environnement)
+│   ├── diagnosis.py        # format de réponse imposé au LLM (Pydantic)
+│   ├── llm_client.py       # appel à Ollama et prompt système
+│   ├── agent.py            # workflow LangGraph
+│   └── report.py           # mise en forme du rapport final
 ├── logs/                   # app.log (généré, non versionné)
 ├── requirements.txt
 └── README.md
