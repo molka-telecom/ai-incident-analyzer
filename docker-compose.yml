@@ -1,0 +1,27 @@
+services:
+  # Application A : l'API de démo qui génère les logs
+  demo-app:
+    build: .
+    image: ai-incident-analyzer:latest
+    container_name: demo-app
+    ports:
+      - "${APP_PORT:-8000}:8000" # port du PC configurable (défaut 8000)
+    volumes:
+      - ./logs:/app/logs # les logs du conteneur sont écrits dans le dossier logs/ du PC
+    environment:
+      TZ: ${TZ:-Europe/Paris} # même fuseau horaire que le PC (sinon les logs sont en UTC)
+
+  # Application B : l'agent IA (lancé à la demande : docker compose run --rm analyzer)
+  analyzer:
+    image: ai-incident-analyzer:latest
+    profiles: ["tools"] # ne démarre pas avec "docker compose up"
+    command: ["python", "-m", "analyzer", "--diagnose"]
+    volumes:
+      - ./logs:/app/logs:ro # lecture seule : l'agent lit les logs sans pouvoir les modifier
+    environment:
+      # Ollama tourne sur le PC (hors Docker) ; host.docker.internal = "le PC vu depuis le conteneur"
+      OLLAMA_HOST: http://host.docker.internal:11434
+      OLLAMA_MODEL: qwen2.5:3b
+      TZ: ${TZ:-Europe/Paris}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

@@ -18,7 +18,7 @@ Application de démo (app/)  ──►  logs/app.log  ──►  Analyseur de lo
 - [x] Tâche 1 — Application de démo et génération des logs
 - [x] Tâche 2 — Collecte et analyse des logs
 - [x] Tâche 3 — Agent IA (Ollama + LangGraph)
-- [ ] Tâche 4 — Docker
+- [x] Tâche 4 — Docker
 - [ ] Tâche 5 — Tests et CI (pytest, GitHub Actions)
 - [ ] Tâche 6 — Kubernetes
 - [ ] Tâche 7 — Supervision (Prometheus, Grafana)
@@ -131,6 +131,26 @@ Vérifications recommandées :
 
 Sur un PC portable sans GPU dédié (i5-1235U), l'analyse de 3 incidents prend environ 1 à 2 minutes.
 
+## Docker
+
+Prérequis : Docker Desktop démarré, Ollama lancé sur la machine hôte.
+
+```powershell
+docker compose build                          # construire l'image
+docker compose up -d                          # lancer l'application de démo (http://127.0.0.1:8000/docs)
+docker compose ps                             # état du conteneur (doit être "healthy")
+docker compose logs -f demo-app               # suivre les logs du conteneur
+docker compose run --rm analyzer              # lancer l'agent IA sur logs/app.log
+docker compose down                           # tout arrêter
+```
+
+- Une seule image (`ai-incident-analyzer`) sert aux deux services : `demo-app` (API) et `analyzer` (agent, lancé à la demande).
+- Le dossier `logs/` du PC est monté dans les conteneurs : l'API y écrit, l'agent le lit en **lecture seule**.
+- Ollama reste sur la machine hôte (modèle déjà téléchargé, meilleures performances) ; le conteneur l'atteint via `host.docker.internal`.
+- Le conteneur tourne avec un utilisateur non-root et possède un `HEALTHCHECK` sur `/health`.
+- Port déjà utilisé (ex. uvicorn lancé en local) ? Choisir un autre port : `$env:APP_PORT="8001"; docker compose up -d`.
+- Le fuseau horaire des conteneurs est réglé par `TZ` (défaut `Europe/Paris`), sinon les logs seraient en UTC.
+
 ## Structure du projet
 
 ```
@@ -151,6 +171,9 @@ ai-incident-analyzer/
 │   ├── agent.py            # workflow LangGraph
 │   └── report.py           # mise en forme du rapport final
 ├── logs/                   # app.log (généré, non versionné)
+├── Dockerfile              # image Python de l'application
+├── .dockerignore           # fichiers exclus de l'image
+├── docker-compose.yml      # services demo-app et analyzer
 ├── requirements.txt
 └── README.md
 ```
