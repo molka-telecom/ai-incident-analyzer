@@ -19,7 +19,7 @@ Application de démo (app/)  ──►  logs/app.log  ──►  Analyseur de lo
 - [x] Tâche 2 — Collecte et analyse des logs
 - [x] Tâche 3 — Agent IA (Ollama + LangGraph)
 - [x] Tâche 4 — Docker
-- [ ] Tâche 5 — Tests et CI (pytest, GitHub Actions)
+- [x] Tâche 5 — Tests et CI (pytest, GitHub Actions)
 - [ ] Tâche 6 — Kubernetes
 - [ ] Tâche 7 — Supervision (Prometheus, Grafana)
 
@@ -151,6 +151,18 @@ docker compose down                           # tout arrêter
 - Port déjà utilisé (ex. uvicorn lancé en local) ? Choisir un autre port : `$env:APP_PORT="8001"; docker compose up -d`.
 - Le fuseau horaire des conteneurs est réglé par `TZ` (défaut `Europe/Paris`), sinon les logs seraient en UTC.
 
+## Tests et CI
+
+```powershell
+pip install -r requirements-dev.txt
+pytest -v
+```
+
+- 32 tests : routes de l'API, lecture des logs, extraction des incidents, client LLM, workflow LangGraph.
+- **Aucun vrai LLM n'est appelé** : Ollama est remplacé par un faux client (mock), les tests sont rapides (≈ 3 s) et reproductibles.
+- Pendant les tests, les logs sont écrits dans un dossier temporaire (`LOG_DIR`), jamais dans `logs/app.log`.
+- GitHub Actions (`.github/workflows/ci.yml`) lance les tests à chaque push, puis construit l'image Docker et vérifie que l'API répond.
+
 ## Structure du projet
 
 ```
@@ -171,6 +183,10 @@ ai-incident-analyzer/
 │   ├── agent.py            # workflow LangGraph
 │   └── report.py           # mise en forme du rapport final
 ├── logs/                   # app.log (généré, non versionné)
+├── tests/                  # tests pytest (LLM simulé)
+├── .github/workflows/ci.yml # pipeline CI GitHub Actions
+├── requirements-dev.txt    # dépendances de test (pytest, httpx)
+├── pytest.ini              # configuration de pytest
 ├── Dockerfile              # image Python de l'application
 ├── .dockerignore           # fichiers exclus de l'image
 ├── docker-compose.yml      # services demo-app et analyzer

@@ -1,0 +1,4 @@
+# Dépendances pour le développement et les tests (non installées dans l'image Docker)
+-r requirements.txt
+pytest>=8.0
+httpx>=0.27
